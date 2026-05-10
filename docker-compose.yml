@@ -1,0 +1,55 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: setufarm
+      POSTGRES_USER: setufarm_user
+      POSTGRES_PASSWORD: setufarm_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql://setufarm_user:setufarm_pass@postgres:5432/setufarm
+      ASYNC_DATABASE_URL: postgresql+asyncpg://setufarm_user:setufarm_pass@postgres:5432/setufarm
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: your-secret-key-here-change-in-production
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  admin:
+    build: ./admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - admin
+
+volumes:
+  postgres_data:
